@@ -2,6 +2,8 @@
 
 Target: Libra Colour, 4.46.23836, basic notebooks. Updated 2026-10-02.
 
+The exact firmware has now been inspected offline. See [firmware findings](firmware-4.46.23836.md) for confirmed notebook-opening symbols and the observed native controller path. Identity resolution and runtime integration remain pending.
+
 ## Verified findings
 
 - Upstream NickelMenu `src/action_cc.cc`, blob `034ff7dc2db6ce78e1ff47b54ddb9c0cec580739`, implements library, store, discovery, and reading-life navigation. Its `nickel_open` handler does not implement a notebook category or a notebook ID argument.
