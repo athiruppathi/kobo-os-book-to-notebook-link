@@ -1,0 +1,6 @@
+data/
+device-dumps/
+exports/
+.env
+*.tgz
+node_modules/
