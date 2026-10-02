@@ -44,3 +44,12 @@ node tools/inspect-device.mjs E:/
 It reports firmware, database presence, possible notebook directory names and counts, notebook file and ZIP-signature counts, exported file counts, and NickelMenu configuration presence. It does not open the database or output serial numbers, notebook names, or notebook contents. Internal directory detection is heuristic.
 
 See [device findings](docs/device-discovery.md) for the initial read-only inspection.
+
+## Notebook navigation research
+
+See [navigation findings](docs/notebook-navigation.md) for verified limitations and the next firmware inspection gate. Run the read-only metadata schema inspector with PowerShell:
+
+pwsh -NoProfile -File tools/inspect-notebooks.ps1 -Mount D:/
+
+Inspector regression checks: pwsh -NoProfile -File test/inspect-notebooks.test.ps1
+
