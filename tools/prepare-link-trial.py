@@ -6,6 +6,7 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'src'))
 from notebook_catalog import read_catalog
+from notebook_tree import chooser_catalog
 
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('mount', type=Path)
@@ -23,10 +24,7 @@ try:
     rows = read_catalog(mount)
     if not rows or any(not row['filePresent'] for row in rows):
         raise ValueError('Notebook catalog is empty or contains missing files')
-    catalog = {'version': 1, 'notebooks': [
-        {'notebookId': row['notebookId'], 'title': Path(row['localPath']).stem}
-        for row in rows
-    ]}
+    catalog = chooser_catalog(mount, rows)
     output.mkdir(parents=True, exist_ok=False)
     (output / 'notebooks.json').write_text(json.dumps(catalog, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
     # Fixed strings only. No book/notebook identity ever enters a shell command.

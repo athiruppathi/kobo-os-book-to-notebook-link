@@ -1,18 +1,15 @@
 // Pinned to the inspected ARM firmware. No hooks or raw notebook/database writes.
 #include <NickelHook.h>
 #include <QApplication>
+#include "native_ui.h"
+#include <QMap>
+#include <QSet>
+#include <algorithm>
 #include <QCryptographicHash>
 #include <QFile>
-#include <QDialog>
-#include <QDialogButtonBox>
-#include <QLabel>
-#include <QListWidget>
-#include <QPushButton>
-#include <QVBoxLayout>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
-#include <QMessageBox>
 #include <QPointer>
 #include <QSaveFile>
 #include <QSocketNotifier>
@@ -133,6 +130,7 @@ public:
 
 class Bridge : public QObject {
     Api api;
+    NativeUi ui;
     int fd;
     QByteArray buffer;
     bool busy = false;
@@ -169,60 +167,95 @@ class Bridge : public QObject {
         QJsonObject catalog = readJson(path("notebooks.json"));
         if (!catalog.value("notebooks").isArray()) throw std::runtime_error("Invalid notebook list.");
         QJsonArray rows = catalog.value("notebooks").toArray();
-        QStringList labels, ids;
+        struct Entry { QString path, id; bool folder; };
+        QVector<Entry> entries;
+        QSet<QString> seenPaths, seenIds;
+        auto safePath = [](const QString &name) {
+            if (name.isEmpty() || name.startsWith('/') || name.contains('\\') || name.contains(':') || name.contains(QChar(0))) return false;
+            for (const QString &part : name.split('/'))
+                if (part.isEmpty() || part == "." || part == "..") return false;
+            return true;
+        };
+        if (!catalog.value("folders").isArray())
+            throw std::runtime_error("Refresh the notebook folder catalog over USB.");
+        for (const QJsonValue &value : catalog.value("folders").toArray()) {
+            QString name = value.toString();
+            if (!safePath(name) || seenPaths.contains(name)) throw std::runtime_error("Invalid folder entry.");
+            seenPaths.insert(name);
+            entries.append(Entry{name, QString(), true});
+        }
         for (const QJsonValue &value : rows) {
             QJsonObject row = value.toObject();
             QString id = row.value("notebookId").toString();
-            QString title = row.value("title").toString();
-            if (!uuid(id) || title.trimmed().isEmpty() || ids.contains(id))
-                throw std::runtime_error("Invalid or duplicate notebook list entry.");
-            ids.append(id);
-            labels.append(QString::number(ids.size()) + ". " + title);
+            QString name = row.value("relativePath").toString();
+            if (!uuid(id) || !safePath(name) || !name.endsWith(".nebo", Qt::CaseInsensitive)
+                || seenPaths.contains(name) || seenIds.contains(id.toLower()))
+                throw std::runtime_error("Invalid notebook list entry.");
+            seenPaths.insert(name);
+            seenIds.insert(id.toLower());
+            entries.append(Entry{name, id, false});
         }
-        if (labels.isEmpty()) throw std::runtime_error("No notebooks available. Refresh the notebook list over USB.");
+        auto parentPath = [](const QString &name) {
+            int slash = name.lastIndexOf('/');
+            return slash < 0 ? QString() : name.left(slash);
+        };
+        QSet<QString> folderPaths;
+        folderPaths.insert(QString());
+        for (const Entry &entry : entries) if (entry.folder) folderPaths.insert(entry.path);
+        for (const Entry &entry : entries)
+            if (!folderPaths.contains(parentPath(entry.path))) throw std::runtime_error("Missing parent folder in catalog.");
+        std::sort(entries.begin(), entries.end(), [](const Entry &a, const Entry &b) {
+            if (a.folder != b.folder) return a.folder;
+            return QString::compare(a.path, b.path, Qt::CaseInsensitive) < 0;
+        });
         QPointer<QWidget> original(view);
-        // A desktop combo popup is unreliable with Nickel's touch/e-ink style.
-        // Keep every interaction in one modal window with full-width list rows.
-        QDialog dialog(view);
-        dialog.setWindowTitle("Link notebook");
-        QVBoxLayout *layout = new QVBoxLayout(&dialog);
-        layout->addWidget(new QLabel("Tap a notebook, then tap Link:", &dialog));
-        QListWidget *list = new QListWidget(&dialog);
-        list->setSelectionMode(QAbstractItemView::SingleSelection);
-        list->setEditTriggers(QAbstractItemView::NoEditTriggers);
-        list->setVerticalScrollMode(QAbstractItemView::ScrollPerPixel);
-        list->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-        list->setWordWrap(true);
-        const int rowHeight = qMax(72, list->fontMetrics().height() * 3);
-        for (const QString &label : labels) {
-            QListWidgetItem *item = new QListWidgetItem(label, list);
-            item->setSizeHint(QSize(0, rowHeight));
+        QString folder, selectedId;
+        int page = 0;
+        while (selectedId.isEmpty()) {
+            if (!original) return;
+            QVector<int> children;
+            for (int i = 0; i < entries.size(); ++i)
+                if (parentPath(entries.at(i).path) == folder) children.append(i);
+            QStringList labels;
+            QVector<int> actions;
+            if (!folder.isEmpty()) { labels.append("< Up one folder"); actions.append(-1); }
+            const int pageSize = 4;
+            const int begin = page * pageSize;
+            for (int i = begin; i < qMin(begin + pageSize, children.size()); ++i) {
+                const Entry &entry = entries.at(children.at(i));
+                QString name = entry.path.section('/', -1);
+                if (!entry.folder) name.chop(5);
+                labels.append(entry.folder ? "[Folder] " + name + " >" : name);
+                actions.append(children.at(i));
+            }
+            if (page > 0) { labels.append("< Previous page"); actions.append(-2); }
+            if (begin + pageSize < children.size()) { labels.append("Next page >"); actions.append(-3); }
+            QString heading = folder.isEmpty() ? "My Notebooks" : folder;
+            if (children.isEmpty()) heading += " (empty)";
+            int choice = ui.choose(original, heading, labels);
+            if (choice < 0) return;
+            int action = actions.at(choice);
+            if (action == -1) { folder = parentPath(folder); page = 0; }
+            else if (action == -2) --page;
+            else if (action == -3) ++page;
+            else {
+                const Entry &entry = entries.at(action);
+                if (entry.folder) { folder = entry.path; page = 0; }
+                else if (original && ui.confirm(original, entry.path.left(entry.path.size() - 5))) {
+                    selectedId = entry.id;
+                }
+            }
         }
-        layout->addWidget(list, 1);
-        QDialogButtonBox *buttons = new QDialogButtonBox(QDialogButtonBox::Cancel, &dialog);
-        QPushButton *confirm = buttons->addButton("Link", QDialogButtonBox::AcceptRole);
-        confirm->setEnabled(false);
-        confirm->setMinimumHeight(rowHeight);
-        buttons->button(QDialogButtonBox::Cancel)->setMinimumHeight(rowHeight);
-        layout->addWidget(buttons);
-        QObject::connect(list, &QListWidget::currentRowChanged, &dialog,
-            [confirm](int row) { confirm->setEnabled(row >= 0); });
-        QObject::connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
-        QObject::connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
-        dialog.resize(view->width() * 9 / 10, view->height() * 4 / 5);
-        if (dialog.exec() != QDialog::Accepted) return;
         if (!original || currentReader() != original || bookId(original) != book)
             throw std::runtime_error("The active book changed. Please try again.");
-        int index = list->currentRow();
-        if (index < 0 || index >= ids.size()) return;
-        Notebook notebook(api, ids.at(index));
+        Notebook notebook(api, selectedId);
         QJsonObject state = linksState();
         QJsonObject links = state.value("links").toObject();
-        links.insert(book, ids.at(index));
+        links.insert(book, selectedId);
         state.insert("links", links);
         writeJson(path("book-links.json"), state);
         report("linked-and-resolved");
-        QMessageBox::information(view, "Book notebook", "Notebook linked to this book.");
+        ui.showOK("Book notebook", "Notebook linked to this book.");
     }
     void run(const QByteArray &command) {
         if (!QFile::exists(path("enabled"))) return;
@@ -238,7 +271,7 @@ class Bridge : public QObject {
                 Notebook notebook(api, id);
                 if (command == "check") {
                     report("reader-and-notebook-validated");
-                    QMessageBox::information(view, "Book notebook", "Current book and linked basic notebook validated.");
+                    ui.showOK("Book notebook", "Current book and linked basic notebook validated.");
                 } else {
                     if (!QFile::exists(path("navigation.enabled")))
                         throw std::runtime_error("Opening is disabled during the first native lookup trial.");
@@ -270,7 +303,7 @@ class Bridge : public QObject {
             } else throw std::runtime_error("Unknown book-notebook command.");
         } catch (const std::exception &error) {
             nh_log("book-notebook action did not complete");
-            QMessageBox::warning(nullptr, "Book notebook", QString::fromUtf8(error.what()));
+            ui.showOK("Book notebook", QString::fromUtf8(error.what()).toHtmlEscaped());
         } catch (...) {
             nh_log("book-notebook action failed with native exception");
         }

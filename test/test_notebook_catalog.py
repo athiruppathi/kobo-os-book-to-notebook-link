@@ -11,6 +11,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'src'))
 from notebook_catalog import MIME, read_catalog, resolve_notebook, local_notebook_path, resolve_book_link
+from notebook_tree import chooser_catalog
 
 IDENTITY = '12345678-1234-4234-8234-123456789abc'
 
@@ -122,6 +123,18 @@ class NotebookCatalogTests(unittest.TestCase):
             self.assertEqual(catalog, json.loads((output / 'notebooks.json').read_text(encoding='utf-8')))
         self.assertEqual(before, hashlib.sha256(self.db.read_bytes()).digest())
         self.assertEqual({'.kobo', 'My Notebooks'}, {p.name for p in self.root.iterdir()})
+
+    def test_chooser_preserves_nested_and_empty_folders_and_duplicate_titles(self):
+        (self.root / 'My Notebooks' / 'Work' / 'Projects').mkdir(parents=True)
+        (self.root / 'My Notebooks' / 'Empty').mkdir()
+        self.add('Notes.nebo')
+        self.add('Work/Projects/Notes.nebo', '87654321-1234-4234-8234-123456789abc')
+        catalog = chooser_catalog(self.root, read_catalog(self.root))
+        self.assertEqual(['Empty', 'Work', 'Work/Projects'], catalog['folders'])
+        self.assertEqual({'Notes.nebo', 'Work/Projects/Notes.nebo'},
+                         {row['relativePath'] for row in catalog['notebooks']})
+        self.assertEqual(['Notes', 'Notes'], [row['title'] for row in catalog['notebooks']])
+        self.assertEqual(2, len({row['notebookId'] for row in catalog['notebooks']}))
 
 
 if __name__ == '__main__':
