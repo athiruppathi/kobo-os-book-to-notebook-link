@@ -6,3 +6,6 @@ exports/
 node_modules/
 __pycache__/
 *.pyc
+native/NickelHook/
+native/*.o
+native/*.so
