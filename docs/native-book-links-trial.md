@@ -6,6 +6,14 @@ Artifact ZIP SHA-256: `c29d15d2c39efa2fba7fff447afc5260082120082ab0c38ea33f378fe
 Library SHA-256: `8d71160af568239cc45420670d4b2a534e619064d970ac2c2bb00695172acf4c`.
 Prepared package SHA-256: `1369f9af24a4bffc82c860263b1aa17bbe9cf9ef0225b828c58490d4d9920713`.
 
+Chooser fix staged October 5 after the initial dropdown failed on-device:
+- Source: `da554faa06e04b7dd7776305219b6eeb6db8f571`.
+- Successful CI: https://github.com/athiruppathi/kobo-os/actions/runs/37340580521
+- Artifact ZIP SHA-256: `f169c8744a73540c992a3b73eb7d4cb7979fad6e92f87342dd646d472efdf077`.
+- Library SHA-256: `106a3922587338da1b1e6a31b41520489d1fc11b67f0228c585fdccc959846df`.
+- Package SHA-256: `0774430d4898a20d92e31fbd8c2f247b659089fecd0180d8bb117e1397b0a64d`.
+- Current USB-visible backup verified: 1,833 files. Opening remains disabled.
+
 This plugin is separate from the symbol-only diagnostic. It calls native reader
 and notebook lookup functions on the GUI thread, and offers a Qt notebook chooser.
 It does not require Node or Python on the Kobo. The earlier JavaScript navigation
@@ -27,6 +35,11 @@ module remains a host-side policy reference, not a device runtime dependency.
 The first trial installs **Link notebook** and **Check linked notebook** in the
 reading menu. It intentionally does not install an Open menu action or create
 `navigation.enabled`. Successful lookup is required before an opening trial.
+
+The initial Qt dropdown was reported unusable on-device. The revised chooser
+uses a single modal window with large, scrollable list rows and explicit Link
+and Cancel buttons. Link is disabled until a row is selected; no typing is
+required. Touch behavior still requires device verification.
 Opening code is experimental and allows only one opener per surviving reader;
 resource-download cancellation/completion tracking is not implemented yet.
 No custom return action is available. A later opening trial must verify native
