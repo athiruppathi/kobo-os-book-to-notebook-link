@@ -1,5 +1,9 @@
 # Native notebook navigation investigation
 
+Update October 5: notebook identity lookup is now implemented on the host using
+the reader database's `ExternalId`. See [identity findings and workflow](notebook-identities.md).
+The earlier metadata findings below describe archive fields, not the separate database identity.
+
 Target: Libra Colour, 4.46.23836, basic notebooks. Updated 2026-10-02.
 
 The exact firmware has now been inspected offline. See [firmware findings](firmware-4.46.23836.md) for confirmed notebook-opening symbols and the observed native controller path. Identity resolution and runtime integration remain pending.

@@ -4,6 +4,10 @@ Personal extensions for Kobo Libra Colour, retaining Kobo's native Nickel reader
 
 ## Current status
 
+The host prototype can now resolve a stored book link to a notebook's current
+file using Kobo's native `ExternalId`. See [notebook identity workflow](docs/notebook-identities.md).
+Native notebook opening on-device remains unimplemented.
+
 Host-side prototype only. Nothing here modifies the Kobo firmware yet.
 
 Device target: **Kobo Libra Colour, firmware 4.46.23836, basic notebooks only**. Native hook compatibility has not been verified.

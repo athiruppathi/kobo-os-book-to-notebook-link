@@ -4,3 +4,5 @@ exports/
 .env
 *.tgz
 node_modules/
+__pycache__/
+*.pyc

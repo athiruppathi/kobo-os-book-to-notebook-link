@@ -11,6 +11,7 @@ from elftools.elf.elffile import ELFFile
 from capstone import Cs, CS_ARCH_ARM, CS_MODE_ARM, CS_MODE_THUMB
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('library')
+parser.add_argument('--symbol', action='append', help='Exact exported symbol to inspect; repeat for multiple functions')
 args = parser.parse_args()
 with open(args.library, 'rb') as f:
     if hashlib.file_digest(f, 'sha256').hexdigest() != '25ec19024666dca7f134335af311593a21cfbd75a0235f1b77c27d9a28f733dd':
@@ -36,7 +37,7 @@ with open(args.library, 'rb') as f:
                 if offset >= 4 and struct.unpack_from('<I',raw,offset-4)[0] == 0x46c04778:
                     names[address-4]=targets[got] # Thumb bx pc; nop veneer
     for sym in syms:
-        if sym.name not in ['_ZN14N3ReaderOpener11openNotePadERK6Volume','_ZN14N3ReaderOpener11showNotePadERK6Volume']:
+        if sym.name not in (args.symbol or ['_ZN14N3ReaderOpener11openNotePadERK6Volume','_ZN14N3ReaderOpener11showNotePadERK6Volume']):
             continue
         section=elf.get_section(sym['st_shndx'])
         addr=sym['st_value'] & ~1
