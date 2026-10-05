@@ -17,10 +17,14 @@ or the database. If disabled, it does nothing. A firmware mismatch is logged and
 skipped. A stale `.tmp` report prevents a new report rather than being overwritten.
 Presence of symbols is not proof of their runtime calling contracts.
 
-Installation has not been performed. Before a device trial, back up user data,
+The symbol diagnostic was installed and passed on October 5 (all nine symbols
+present; no native calls). Before another device trial, back up user data,
 verify the compiled artifact, prepare the NickelHook uninstall marker
 `.adds/kobo-os-probe.uninstall`, and confirm recovery access via USB. The loader
 itself runs inside Nickel even though this probe makes no native calls.
+
+The separate `links/` plugin implements a native reader/notebook adapter and
+link chooser. See [its staged trial](../docs/native-book-links-trial.md).
 
 Local build requires Linux/Docker:
 

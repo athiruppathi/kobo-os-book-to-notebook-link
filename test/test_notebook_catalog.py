@@ -96,6 +96,33 @@ class NotebookCatalogTests(unittest.TestCase):
         self.assertEqual(1, run.returncode)
         self.assertEqual('preserve', destination.read_text(encoding='utf-8'))
 
+    def test_native_trial_preparation_is_private_read_only_and_exclusive(self):
+        self.add('PRIVATE_TITLE.nebo')
+        project = Path(__file__).resolve().parents[1]
+        private = project / 'device-dumps'
+        private.mkdir(exist_ok=True)
+        before = hashlib.sha256(self.db.read_bytes()).digest()
+        with tempfile.TemporaryDirectory(dir=private) as output_root:
+            output = Path(output_root) / 'trial'
+            command = [sys.executable, str(project / 'tools/prepare-link-trial.py'),
+                       str(self.root), str(output)]
+            run = subprocess.run(command, capture_output=True, text=True, check=True)
+            self.assertFalse(json.loads(run.stdout)['navigationEnabled'])
+            self.assertNotIn(IDENTITY, run.stdout)
+            self.assertNotIn('PRIVATE_TITLE', run.stdout)
+            catalog = json.loads((output / 'notebooks.json').read_text(encoding='utf-8'))
+            self.assertEqual(IDENTITY, catalog['notebooks'][0]['notebookId'])
+            self.assertEqual('PRIVATE_TITLE', catalog['notebooks'][0]['title'])
+            menu = (output / 'kobo-os-links').read_text(encoding='utf-8')
+            self.assertNotIn(IDENTITY, menu)
+            self.assertNotIn('PRIVATE_TITLE', menu)
+            self.assertNotIn('printf "open', menu)
+            run = subprocess.run(command, capture_output=True, text=True)
+            self.assertEqual(1, run.returncode)
+            self.assertEqual(catalog, json.loads((output / 'notebooks.json').read_text(encoding='utf-8')))
+        self.assertEqual(before, hashlib.sha256(self.db.read_bytes()).digest())
+        self.assertEqual({'.kobo', 'My Notebooks'}, {p.name for p in self.root.iterdir()})
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -10,9 +10,10 @@ Concurrent activation and nested notebook opens are rejected. Missing links,
 unavailable notebooks, failed opens, cancelled exits, and failed restores have
 explicit ownership/retry behavior. Tests use a simulated adapter.
 
-This JavaScript module runs on the development host. It is an executable policy
-reference, not code currently running inside Nickel. No native adapter or menu
-action is implemented yet; no new package is ready to install.
+This JavaScript module runs on the development host as an executable policy
+reference. A C++ native adapter and first lookup trial now exist in
+`native/links/`; see [native trial](native-book-links-trial.md). Native opening
+and return behavior have not been tested on-device.
 
 ## Native adapter contract
 
