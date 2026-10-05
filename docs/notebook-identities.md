@@ -61,8 +61,17 @@ refusal to overwrite exports. Six Node tests and the metadata-inspector checks
 also passed. The simulated rename tests our resolver's behavior; firmware's own
 ID preservation during a rename still needs physical testing.
 
-The reader was not mounted during this validation. Reconnect it by USB to verify
-the resolver against its real catalog. Then validate native object construction,
+After reconnection on October 5, the reader mounted at D:/ and still reported
+firmware 4.46.23836. The live read-only catalog contained seven notebooks and
+all seven files were present. All seven resolved directly by ExternalId, and all
+seven also resolved through temporary host-side book-links v1 records. These
+records used synthetic book IDs and were removed after the check; they were not
+user-selected book associations. SHA-256 of KoboReader.sqlite matched before
+and after validation. No device files were changed and no personal IDs or paths
+were included in the report.
+
+This validates host-side identity resolution against the actual reader. Next,
+validate native object construction,
 return-value ABI, GUI-thread dispatch and lifetime before invoking the notebook
 opening method. The constructor's exported signature alone is insufficient to
 choose an allocation size or safely fabricate a Volume object.
