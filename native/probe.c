@@ -1,4 +1,5 @@
 /* One-shot symbol probe. Never invokes native methods or installs PLT hooks. */
+#define _GNU_SOURCE
 #include <NickelHook.h>
 #include <dlfcn.h>
 #include <stdio.h>
@@ -66,7 +67,8 @@ static struct nh_info info = {
     .uninstall_flag = "/mnt/onboard/.adds/kobo-os-probe.uninstall",
 };
 
-NickelHook(
+/* Direct C initializer for NickelTC's GCC 4.9; equivalent exported descriptor. */
+__attribute__((visibility("default"))) struct nh NickelHook = {
     .init = probe_init,
     .info = &info,
-)
+};
