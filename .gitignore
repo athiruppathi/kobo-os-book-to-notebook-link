@@ -9,3 +9,5 @@ __pycache__/
 native/NickelHook/
 native/*.o
 native/*.so
+native/links/*.o
+native/links/*.so

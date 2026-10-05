@@ -12,6 +12,7 @@ import tarfile
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('library', type=Path)
 parser.add_argument('output', type=Path)
+parser.add_argument('--component', choices=['probe', 'links'], default='probe')
 args = parser.parse_args()
 data = args.library.read_bytes()
 if len(data) < 52 or data[:6] != b'\x7fELF\x01\x01' or struct.unpack_from('<H', data, 18)[0] != 40:
@@ -20,7 +21,8 @@ if struct.unpack_from('<H', data, 16)[0] != 3:
     raise SystemExit('Expected an ELF shared object')
 with args.output.open('xb') as output:
     with tarfile.open(fileobj=output, mode='w:gz', format=tarfile.USTAR_FORMAT) as archive:
-        entry = tarfile.TarInfo('./usr/local/Kobo/imageformats/libkobolinkprobe.so')
+        name = 'libkobolinkprobe.so' if args.component == 'probe' else 'libkobobooklinks.so'
+        entry = tarfile.TarInfo('./usr/local/Kobo/imageformats/' + name)
         entry.size = len(data)
         entry.mode = 0o644
         entry.uid = entry.gid = 0

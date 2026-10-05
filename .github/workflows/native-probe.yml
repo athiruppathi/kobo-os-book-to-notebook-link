@@ -33,3 +33,13 @@ jobs:
           path: native/libkobolinkprobe.so
           if-no-files-found: error
           retention-days: 7
+      - name: Compile native book links
+        run: |
+          docker run --rm --volume "$PWD:/src" --workdir /src/native/links \
+            ghcr.io/pgaskin/nickeltc:1 /bin/sh -ec 'make clean && make && arm-nickel-linux-gnueabihf-readelf -h libkobobooklinks.so'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kobobooklinks-uninstalled
+          path: native/links/libkobobooklinks.so
+          if-no-files-found: error
+          retention-days: 7
