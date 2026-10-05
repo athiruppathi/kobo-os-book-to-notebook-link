@@ -3,7 +3,12 @@
 #include <QApplication>
 #include <QCryptographicHash>
 #include <QFile>
-#include <QInputDialog>
+#include <QDialog>
+#include <QDialogButtonBox>
+#include <QLabel>
+#include <QListWidget>
+#include <QPushButton>
+#include <QVBoxLayout>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -176,13 +181,40 @@ class Bridge : public QObject {
         }
         if (labels.isEmpty()) throw std::runtime_error("No notebooks available. Refresh the notebook list over USB.");
         QPointer<QWidget> original(view);
-        bool ok = false;
-        QString choice = QInputDialog::getItem(view, "Link notebook", "Notebook for this book:", labels, 0, false, &ok);
-        if (!ok) return;
+        // A desktop combo popup is unreliable with Nickel's touch/e-ink style.
+        // Keep every interaction in one modal window with full-width list rows.
+        QDialog dialog(view);
+        dialog.setWindowTitle("Link notebook");
+        QVBoxLayout *layout = new QVBoxLayout(&dialog);
+        layout->addWidget(new QLabel("Tap a notebook, then tap Link:", &dialog));
+        QListWidget *list = new QListWidget(&dialog);
+        list->setSelectionMode(QAbstractItemView::SingleSelection);
+        list->setEditTriggers(QAbstractItemView::NoEditTriggers);
+        list->setVerticalScrollMode(QAbstractItemView::ScrollPerPixel);
+        list->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+        list->setWordWrap(true);
+        const int rowHeight = qMax(72, list->fontMetrics().height() * 3);
+        for (const QString &label : labels) {
+            QListWidgetItem *item = new QListWidgetItem(label, list);
+            item->setSizeHint(QSize(0, rowHeight));
+        }
+        layout->addWidget(list, 1);
+        QDialogButtonBox *buttons = new QDialogButtonBox(QDialogButtonBox::Cancel, &dialog);
+        QPushButton *confirm = buttons->addButton("Link", QDialogButtonBox::AcceptRole);
+        confirm->setEnabled(false);
+        confirm->setMinimumHeight(rowHeight);
+        buttons->button(QDialogButtonBox::Cancel)->setMinimumHeight(rowHeight);
+        layout->addWidget(buttons);
+        QObject::connect(list, &QListWidget::currentRowChanged, &dialog,
+            [confirm](int row) { confirm->setEnabled(row >= 0); });
+        QObject::connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
+        QObject::connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+        dialog.resize(view->width() * 9 / 10, view->height() * 4 / 5);
+        if (dialog.exec() != QDialog::Accepted) return;
         if (!original || currentReader() != original || bookId(original) != book)
             throw std::runtime_error("The active book changed. Please try again.");
-        int index = labels.indexOf(choice);
-        if (index < 0) return;
+        int index = list->currentRow();
+        if (index < 0 || index >= ids.size()) return;
         Notebook notebook(api, ids.at(index));
         QJsonObject state = linksState();
         QJsonObject links = state.value("links").toObject();
