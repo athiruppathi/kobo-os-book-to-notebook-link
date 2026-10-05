@@ -12,6 +12,7 @@ from capstone import Cs, CS_ARCH_ARM, CS_MODE_ARM, CS_MODE_THUMB
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('library')
 parser.add_argument('--symbol', action='append', help='Exact exported symbol to inspect; repeat for multiple functions')
+parser.add_argument('--instructions', action='store_true', help='Include instructions and operands for ABI and ownership analysis')
 args = parser.parse_args()
 with open(args.library, 'rb') as f:
     if hashlib.file_digest(f, 'sha256').hexdigest() != '25ec19024666dca7f134335af311593a21cfbd75a0235f1b77c27d9a28f733dd':
@@ -48,4 +49,6 @@ with open(args.library, 'rb') as f:
             annotation=''
             if ins.mnemonic in ['bl','blx','b','b.w'] and ins.op_str.startswith('#'):
                 annotation=names.get(int(ins.op_str[1:],0)&~1,'')
-            if annotation: print(hex(ins.address),ins.mnemonic,annotation)
+            if args.instructions:
+                print(hex(ins.address), ins.mnemonic, ins.op_str, annotation)
+            elif annotation: print(hex(ins.address),ins.mnemonic,annotation)

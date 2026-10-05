@@ -1,5 +1,8 @@
 # Native notebook navigation investigation
 
+Implementation has started: see [navigation policy and native adapter contract](book-notebook-implementation.md).
+The on-device symbol diagnostic passed October 5; native navigation remains unimplemented.
+
 Update October 5: notebook identity lookup is now implemented on the host using
 the reader database's `ExternalId`. See [identity findings and workflow](notebook-identities.md).
 The earlier metadata findings below describe archive fields, not the separate database identity.
