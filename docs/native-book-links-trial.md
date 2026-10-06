@@ -1,5 +1,36 @@
 # Native book links: first lookup trial
 
+## Opening milestone (October 6)
+
+Prepared build (not yet installed):
+- Source: `baa1f930b1ee558920d104cc0a228dce8af41755`.
+- Successful CI: https://github.com/athiruppathi/kobo-os/actions/runs/37462000797
+- ZIP SHA-256: `78eb7004be32cdc3aee4c89bb0e72ba648901f9b7bdf4d98c8a8ec9269b6231a`.
+- Library SHA-256: `bfc1ba05f40a02979d12af2615fd0d9657a9d0b0cf2c56eb2f1beddfa4a00470`.
+- Package SHA-256: `f8200e0f432891c0150c47990f8c0b231adcdb3cab5233fce7b39e81e0314c3d`.
+- Private local package/menu: `device-dumps/book-links-open-20261006/`.
+
+The user confirmed the native chooser worked and Check linked notebook reported
+that the current book and linked basic notebook validated. They explicitly
+requested replacing Check with Open linked notebook and enabling navigation.
+
+The new reading-menu action sends `open`. Missing mappings show the native
+popup body exactly `No linked notebook`. Linked books use the native reader
+factory and notebook opener, including Nickel's bundle/font checks. After a
+confirmed notebook view is destroyed by native navigation, its opener is
+released with deleteLater so later opens can create a fresh opener. Resource
+download transitions remain conservative: an unconfirmed opener is retained.
+
+Deployment requires the updated plugin, replacement of only this project's
+menu file, and creation of `.adds/kobo-os/navigation.enabled`. Preserve the
+existing book-links.json; do not restore mappings from a pre-link backup.
+The user has authorized this opening behavior. Native notebook opening, Back,
+handwriting persistence, and repeat opening still require device verification.
+
+Test a linked book with Open linked notebook, then native Back, then Open again.
+Also test an unlinked book for the exact missing-link message. Do not modify or
+force-pop the native notebook controller to simulate a successful return.
+
 ## Current candidate: native touch controls and folder browser
 
 The plain Qt dropdown and list trials both displayed but did not respond to
