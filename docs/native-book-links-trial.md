@@ -2,6 +2,10 @@
 
 ## Opening milestone (October 6)
 
+The opening-only candidate below is superseded by the
+[bidirectional build](notebook-to-book.md), which also adds Open linked book
+to native notebook menus. Deploy the newer package for both requested actions.
+
 Prepared build (not yet installed):
 - Source: `baa1f930b1ee558920d104cc0a228dce8af41755`.
 - Successful CI: https://github.com/athiruppathi/kobo-os/actions/runs/37462000797
