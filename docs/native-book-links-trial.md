@@ -1,5 +1,38 @@
 # Native book links: first lookup trial
 
+## Current candidate: native touch controls and folder browser
+
+The plain Qt dropdown and list trials both displayed but did not respond to
+touch. The current candidate uses Nickel's ConfirmationDialog factory and
+MenuTextItem rows registered for native TapGesture delivery. Confirmation and
+error messages also use native dialogs. Device touch behavior remains unverified.
+
+Folder navigation preserves relative paths and empty directories, shows only
+the current folder's contents, and includes Up and pagination. Only notebook
+leaves can be linked. The catalog is a USB-prepared snapshot; refresh it when
+notebooks or folders change. Nested folders and duplicate notebook titles in
+different folders are covered by host tests.
+
+- Source: `d175269c721da53485af9dab8a238d68aab1148f`.
+- Successful ARM build: https://github.com/athiruppathi/kobo-os/actions/runs/37342294243
+- Artifact ZIP SHA-256: `bb083e91417e9694616a6716b65ab50d99b44f2113b2ae2699fe0be875b1c964`.
+- Library SHA-256: `96a2c28bb2fb7a8d5bc5577099c7990aab66d3e0c9f45ed7b5643032257f1f94`.
+- Package SHA-256: `1a70fc7588cb7a48e1b048ff36e1109979ebf2418fd764c153e79caabb6266ff`.
+- Prepared locally October 6; not staged because the Kobo was disconnected.
+
+Before staging, refresh chooser data from the connected device, back up the
+existing catalog, and replace only notebooks.json plus the plugin package.
+Preserve book-links.json, menu entries, and the disabled navigation state.
+
+Native UI ABI evidence in the pinned firmware: getConfirmationDialog at
+0x11179c0 allocates and constructs a QDialog-derived native object; no guessed
+dialog layout is used. Native createMenuTextItem at 0xee34e0 allocates 0x60 bytes,
+which the wrapper uses with the native MenuTextItem constructor. Its registration
+method at 0xf02bfc grabs the native gesture and sets its delegate. QObject signal
+connections dispatch row taps; no global touch/mouse synthesis setting is changed.
+
+## Earlier trial builds
+
 Built source: `a9893611e423a4df3c934be1c4621b6893318f1b`.
 Successful CI: https://github.com/athiruppathi/kobo-os/actions/runs/37338588152
 Artifact ZIP SHA-256: `c29d15d2c39efa2fba7fff447afc5260082120082ab0c38ea33f378fe069eed3`.
