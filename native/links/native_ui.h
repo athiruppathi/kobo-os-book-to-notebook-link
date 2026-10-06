@@ -49,6 +49,17 @@ struct NativeUi {
         }
         ~OwnedDialog() { if (value) delete value.data(); }
     };
+    QWidget *tapItem(QWidget *parent, const QString &label) {
+        // Native createMenuTextItem allocates 0x60 bytes on the pinned firmware.
+        void *memory = ::operator new(0x60);
+        QWidget *item = static_cast<QWidget *>(memory);
+        try { itemCtor(item, parent, false, true); }
+        catch (...) { ::operator delete(memory); throw; }
+        itemText(item, label);
+        itemGestures(item);
+        item->setMinimumHeight(qMax(72, item->fontMetrics().height() * 2));
+        return item;
+    }
     int choose(QWidget *parent, const QString &heading, const QStringList &labels) {
         OwnedDialog owned(create(parent));
         QDialog *dialog = owned.value.data();
@@ -60,15 +71,7 @@ struct NativeUi {
         QObject::connect(mapper, static_cast<void(QSignalMapper::*)(int)>(&QSignalMapper::mapped),
             dialog, [dialog](int index) { dialog->done(1000 + index); });
         for (int i = 0; i < labels.size(); ++i) {
-            // createMenuTextItem at 0xee34e0 allocates exactly 0x60 bytes on the
-            // hash-pinned firmware. The native constructor owns QObject setup.
-            void *memory = ::operator new(0x60);
-            QWidget *item = static_cast<QWidget *>(memory);
-            try { itemCtor(item, dialog, false, true); }
-            catch (...) { ::operator delete(memory); throw; }
-            itemText(item, labels.at(i));
-            itemGestures(item);
-            item->setMinimumHeight(qMax(72, item->fontMetrics().height() * 2));
+            QWidget *item = tapItem(dialog, labels.at(i));
             mapper->setMapping(item, i);
             if (!QObject::connect(item, SIGNAL(tapped(bool)), mapper, SLOT(map())))
                 throw std::runtime_error("Cannot connect native tap handler.");

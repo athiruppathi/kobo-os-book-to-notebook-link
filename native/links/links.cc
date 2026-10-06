@@ -5,6 +5,10 @@
 #include <QMap>
 #include <QSet>
 #include <algorithm>
+#include <QMenu>
+#include <QWidgetAction>
+#include <QTimer>
+#include <QEvent>
 #include <QCryptographicHash>
 #include <QFile>
 #include <QJsonArray>
@@ -46,6 +50,13 @@ struct Api {
     bool (*basic)(const VolumeStorage *);
     QObject *(*createReader)(void *, const VolumeStorage *, const void *, void *);
     void (*openNotebook)(QObject *, const VolumeStorage *);
+    const QString &(*dbName)(const void *);
+    void (*lookupBook)(VolumeStorage *, const QString &, const QString &);
+    QString (*title)(const VolumeStorage *);
+    bool (*isNotebook)(const VolumeStorage *);
+    void (*bookmarkCtor)(VolumeStorage *);
+    void (*bookmarkDtor)(VolumeStorage *);
+    void (*openBook)(QObject *, const VolumeStorage *);
 
     template<class T> void bind(T &target, const char *name) {
         target = reinterpret_cast<T>(dlsym(RTLD_DEFAULT, name));
@@ -65,6 +76,13 @@ struct Api {
         bind(basic, "_ZNK6Volume15isBasicNotebookEv");
         bind(createReader, "_ZN16ReadingViewMixin12createReaderERK6VolumeRK7QVectorI10ContentKeyEP25AbstractLibraryControllerIS0_E");
         bind(openNotebook, "_ZN14N3ReaderOpener11openNotePadERK6Volume");
+        bind(dbName, "_ZNK6Device9getDbNameEv");
+        bind(lookupBook, "_ZN13VolumeManager7getByIdERK7QStringS2_");
+        bind(title, "_ZNK7Content8getTitleEv");
+        bind(isNotebook, "_ZNK7Content10isNotebookEv");
+        bind(bookmarkCtor, "_ZN8BookmarkC1Ev");
+        bind(bookmarkDtor, "_ZN8BookmarkD1Ev");
+        bind(openBook, "_ZN14N3ReaderOpener10openReaderERK8Bookmark");
     }
 };
 
@@ -138,6 +156,162 @@ class Bridge : public QObject {
     QPointer<QWidget> reader;
     QPointer<QWidget> notebookView;
     QPointer<QObject> opener;
+    void *noteLibrary = nullptr;
+    void (*noteVolume)(VolumeStorage *, const QWidget *) = nullptr;
+    void (*noteQuit)(QWidget *) = nullptr;
+    bool reverseQueued = false;
+
+    void bindNotebookApi() {
+        if (noteVolume && noteQuit) return;
+        QFile library("/usr/local/Kobo/libiinknote.so");
+        QCryptographicHash hash(QCryptographicHash::Sha256);
+        if (!library.open(QIODevice::ReadOnly) || !hash.addData(&library)
+            || hash.result().toHex() != "2fa70e17773c645d659ff10eefc3692ffe474feb53a9b4b43d964917653c6b7c")
+            throw std::runtime_error("Unsupported notebook library.");
+        // Acquire only an already loaded module; do not load notebooks at startup.
+        if (!noteLibrary) noteLibrary = dlopen("/usr/local/Kobo/libiinknote.so", RTLD_LAZY | RTLD_NOLOAD);
+        if (!noteLibrary) throw std::runtime_error("Notebook library is not loaded.");
+        noteVolume = reinterpret_cast<decltype(noteVolume)>(dlsym(noteLibrary, "_ZNK11IInkNotePad9getVolumeEv"));
+        noteQuit = reinterpret_cast<decltype(noteQuit)>(dlsym(noteLibrary, "_ZN11IInkNotePad4quitEv"));
+        if (!noteVolume || !noteQuit) throw std::runtime_error("Notebook navigation API unavailable.");
+    }
+    struct NativeValue {
+        VolumeStorage data;
+        void (*destroy)(VolumeStorage *);
+        bool constructed = false;
+        explicit NativeValue(void (*d)(VolumeStorage *)) : destroy(d) {}
+        ~NativeValue() { if (constructed) destroy(&data); }
+        NativeValue(const NativeValue &) = delete;
+        NativeValue &operator=(const NativeValue &) = delete;
+    };
+    void getBook(NativeValue &value, const QString &id) {
+        const void *device = api.device();
+        if (!device) throw std::runtime_error("Current device unavailable.");
+        api.lookupBook(&value.data, id, api.dbName(device));
+        value.constructed = true;
+        if (!api.valid(&value.data) || api.isNotebook(&value.data)
+            || QString::fromUtf8(api.contentId(&value.data)) != id)
+            throw std::runtime_error("Linked book is unavailable.");
+    }
+    void openLinkedBook() {
+        if (!QFile::exists(path("navigation.enabled")))
+            throw std::runtime_error("Notebook navigation is disabled.");
+        void *window = api.window();
+        QWidget *current = window ? api.view(window) : nullptr;
+        if (!current || !current->inherits("IInkNotePad"))
+            throw std::runtime_error("Open a basic notebook first.");
+        bindNotebookApi();
+        NativeValue volume(api.destroyVolume);
+        noteVolume(&volume.data, current); // native getter returns by value via r0
+        volume.constructed = true;
+        if (!api.valid(&volume.data) || !api.basic(&volume.data))
+            throw std::runtime_error("Open a basic notebook first.");
+        const QString notebookId = api.externalId(&volume.data);
+        QJsonObject links = linksState().value("links").toObject();
+        QStringList books;
+        for (auto it = links.begin(); it != links.end(); ++it)
+            if (it.value().toString().compare(notebookId, Qt::CaseInsensitive) == 0) books.append(it.key());
+        if (books.isEmpty()) throw std::runtime_error("No linked book");
+
+        QPointer<QWidget> note(current);
+        QPointer<QWidget> underneath(api.underneath(api.window()));
+        QString selected;
+        // Prefer the exact reader from our forward transition, if it still exists
+        // immediately underneath this notebook and is still linked to it.
+        if (reader && notebookView == note && underneath == reader) {
+            QString origin = bookId(reader);
+            if (books.contains(origin)) selected = origin;
+        }
+        if (selected.isEmpty() && books.size() == 1) selected = books.first();
+        if (selected.isEmpty()) {
+            QStringList titles;
+            for (int i = 0; i < books.size(); ++i) {
+                QString title;
+                try { NativeValue book(api.destroyVolume); getBook(book, books.at(i)); title = api.title(&book.data); }
+                catch (const std::exception &) { title = "Unavailable book"; }
+                if (title.isEmpty()) title = "Untitled book";
+                titles.append(QString::number(i + 1) + ". " + title);
+            }
+            int page = 0;
+            while (selected.isEmpty()) {
+                if (!note) return;
+                QStringList labels = titles.mid(page * 4, 4);
+                const int count = labels.size();
+                if (page > 0) labels.append("< Previous page");
+                if ((page + 1) * 4 < titles.size()) labels.append("Next page >");
+                int choice = ui.choose(note, "Open linked book", labels);
+                if (choice < 0) return;
+                if (choice < count) selected = books.at(page * 4 + choice);
+                else if (page > 0 && choice == count) --page;
+                else ++page;
+            }
+        }
+        NativeValue book(api.destroyVolume);
+        getBook(book, selected); // Resolve before leaving; failures keep notebook open.
+        if (!note || api.view(api.window()) != note)
+            throw std::runtime_error("The active notebook changed. Please try again.");
+        const bool resume = underneath && underneath->inherits("ReadingView") && bookId(underneath) == selected;
+        noteQuit(note); // Exact native Back handler. viewWillDisappear saves handwriting.
+        QWidget *after = api.view(api.window());
+        if (after == note) throw std::runtime_error("Notebook did not close. Please use its Back button.");
+        if (resume && underneath && after == underneath) {
+            report("returned-to-linked-reader");
+            return;
+        }
+        NativeValue bookmark(api.bookmarkDtor);
+        api.bookmarkCtor(&bookmark.data);
+        bookmark.constructed = true;
+        const QVector<quint64> emptyKeys;
+        QPointer<QObject> bookOpener(api.createReader(nullptr, &book.data, &emptyKeys, nullptr));
+        if (!bookOpener) throw std::runtime_error("Cannot create book opener.");
+        bookOpener->setParent(this);
+        api.openBook(bookOpener, &bookmark.data); // Native default bookmark/resume behavior.
+        if (bookOpener) bookOpener->deleteLater();
+        QWidget *opened = api.view(api.window());
+        if (opened && opened->inherits("ReadingView") && bookId(opened) == selected)
+            report("linked-book-opened");
+        else report("book-open-requested-transition-unconfirmed");
+    }
+
+    bool eventFilter(QObject *watched, QEvent *event) override {
+        if (event->type() != QEvent::Show || !QFile::exists(path("enabled"))) return false;
+        QMenu *menu = qobject_cast<QMenu *>(watched);
+        if (!menu || menu->property("koboOsLinkedBook").toBool()) return false;
+        void *window = api.window();
+        QWidget *current = window ? api.view(window) : nullptr;
+        if (!current || !current->inherits("IInkNotePad")) return false;
+        bool notebookMenu = false;
+        for (QWidget *child : menu->findChildren<QWidget *>())
+            if (child->inherits("IInkMenuItem")) { notebookMenu = true; break; }
+        if (!notebookMenu) return false;
+        try {
+            bindNotebookApi();
+            QWidgetAction *action = new QWidgetAction(menu);
+            QWidget *item = ui.tapItem(menu, "Open linked book");
+            action->setDefaultWidget(item);
+            if (!QObject::connect(item, SIGNAL(tapped(bool)), action, SLOT(trigger()))) {
+                delete action;
+                return false;
+            }
+            QPointer<QMenu> menuGuard(menu);
+            QObject::connect(action, &QAction::triggered, this, [this, menuGuard](bool) {
+                if (reverseQueued) return;
+                reverseQueued = true;
+                if (menuGuard) menuGuard->hide();
+                QTimer *timer = new QTimer(this);
+                timer->setSingleShot(true);
+                QObject::connect(timer, &QTimer::timeout, this, [this, timer]() {
+                    reverseQueued = false;
+                    timer->deleteLater();
+                    run("book");
+                });
+                timer->start(0); // Leave the tap/menu-close callback before navigation.
+            });
+            menu->insertAction(menu->actions().isEmpty() ? nullptr : menu->actions().first(), action);
+            menu->setProperty("koboOsLinkedBook", true);
+        } catch (...) { nh_log("Could not add notebook-to-book menu action"); }
+        return false;
+    }
 
     QWidget *currentReader() {
         void *window = api.window();
@@ -262,6 +436,7 @@ class Bridge : public QObject {
         if (busy) return;
         busy = true;
         try {
+            if (command == "book") { openLinkedBook(); busy = false; return; }
             QWidget *view = currentReader();
             QString book = bookId(view);
             if (command == "link") link(view, book);
@@ -353,8 +528,13 @@ public:
         });
         try { report("native-bridge-ready"); }
         catch (...) { ::close(fd); fd = -1; throw; }
+        qApp->installEventFilter(this);
     }
-    ~Bridge() { if (fd >= 0) ::close(fd); }
+    ~Bridge() {
+        if (qApp) qApp->removeEventFilter(this);
+        if (fd >= 0) ::close(fd);
+        if (noteLibrary) dlclose(noteLibrary);
+    }
 };
 
 static int init() {

@@ -15,7 +15,10 @@ parser.add_argument('--symbol', action='append', help='Exact exported symbol to 
 parser.add_argument('--instructions', action='store_true', help='Include instructions and operands for ABI and ownership analysis')
 args = parser.parse_args()
 with open(args.library, 'rb') as f:
-    if hashlib.file_digest(f, 'sha256').hexdigest() != '25ec19024666dca7f134335af311593a21cfbd75a0235f1b77c27d9a28f733dd':
+    if hashlib.file_digest(f, 'sha256').hexdigest() not in {
+        '25ec19024666dca7f134335af311593a21cfbd75a0235f1b77c27d9a28f733dd',
+        '2fa70e17773c645d659ff10eefc3692ffe474feb53a9b4b43d964917653c6b7c',
+    }:
         raise SystemExit('Unsupported firmware hash; review PLT layout before adapting this tool')
     f.seek(0)
     elf=ELFFile(f)
