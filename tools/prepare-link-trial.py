@@ -29,7 +29,7 @@ try:
     (output / 'notebooks.json').write_text(json.dumps(catalog, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
     # Fixed strings only. No book/notebook identity ever enters a shell command.
     entries = []
-    for title, command in [('Link notebook', 'link'), ('Check linked notebook', 'check')]:
+    for title, command in [('Link notebook', 'link'), ('Open linked notebook', 'open')]:
         entries.append(f'menu_item : reader : {title} : cmd_spawn : quiet : test -p /tmp/kobo-os-book-links.fifo && printf "{command}\\n" > /tmp/kobo-os-book-links.fifo')
     (output / 'kobo-os-links').write_text('\n'.join(entries) + '\n', encoding='utf-8')
     print(json.dumps({'notebooksPrepared': len(rows), 'navigationEnabled': False}))

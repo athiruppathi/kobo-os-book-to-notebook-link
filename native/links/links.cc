@@ -267,7 +267,7 @@ class Bridge : public QObject {
             if (command == "link") link(view, book);
             else if (command == "check" || command == "open") {
                 QString id = linksState().value("links").toObject().value(book).toString();
-                if (id.isEmpty()) throw std::runtime_error("No notebook linked. Choose Link notebook first.");
+                if (id.isEmpty()) throw std::runtime_error("No linked notebook");
                 Notebook notebook(api, id);
                 if (command == "check") {
                     report("reader-and-notebook-validated");
@@ -295,6 +295,20 @@ class Bridge : public QObject {
                     QWidget *after = api.view(window);
                     if (after != view && api.underneath(window) == view) {
                         notebookView = after;
+                        // The successful native push has finished using this opener.
+                        // Retain it through the notebook session, then release it after
+                        // Nickel destroys that view on Back. This permits a later open
+                        // without retaining a stale notebook or requiring a restart.
+                        QPointer<QObject> completedOpener(object);
+                        QObject::connect(after, &QObject::destroyed, this,
+                            [this, completedOpener]() {
+                                if (completedOpener) completedOpener->deleteLater();
+                                if (opener == completedOpener) {
+                                    opener.clear();
+                                    notebookView.clear();
+                                    reader.clear();
+                                }
+                            });
                         report("view-pushed-reader-retained");
                     } else report("open-requested-transition-unconfirmed");
                     // Retain the QObject for asynchronous bundle/font dialogs. Do not
