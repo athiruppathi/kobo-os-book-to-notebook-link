@@ -2,6 +2,19 @@
 
 October 20, 2026 candidate; device verification pending.
 
+- Source: `03721907f48ead89d009ff2ae5e89a919ed311a8`.
+- ARM build and native catalog tests passed:
+  https://github.com/athiruppathi/kobo-os/actions/runs/39474158237
+- Artifact ZIP SHA-256: `e990056eb83126c911b58dd9452522ec3cfbac67b3eb82034ffc32fb78f92c7f`.
+- Library SHA-256: `6670da36108a70bd6649680cdc42ba92a84ff71fec8ed235049c0d9a92fb923b`.
+- Package SHA-256: `783fc118d0a8e073dd6442e0dbe02a8d55284d0219e0db503f9c07859f26dff7`.
+- Prepared package: `device-dumps/book-links-live-20261020/KoboRoot.tgz`.
+
+For a device already running the prior opening trial, copy only this package
+to `.kobo/KoboRoot.tgz` (do not extract), then safely eject and disconnect.
+Do not replace an unrelated pending update. Existing enabled/navigation.enabled,
+menu, and saved book links remain in place. The package contains only the plugin.
+
 The old chooser read a USB-prepared snapshot. It could miss subsequent creations
 and moves. It also stacked four entries plus up to three navigation rows inside
 a confirmation dialog. The new chooser reads the current database using its own
@@ -44,3 +57,7 @@ tappable; recent additions appear; linked notebooks with one and many pages open
 at their last existing page; handwriting and returning to the book still work.
 Direct USB access from this Windows session is currently denied, so deployment
 must await restored device access or a manual package copy.
+
+Firmware compatibility check: Nickel uses the QSQLITE driver; the firmware's
+Qt5Sql aliases resolve to the bundled QtSql library, and its bundled SQLite
+driver contains the QSQLITE_OPEN_READONLY option.
