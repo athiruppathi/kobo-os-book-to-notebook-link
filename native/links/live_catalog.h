@@ -38,7 +38,11 @@ static QJsonObject liveNotebookCatalog(const QString &mount = "/mnt/onboard") {
     QSet<QString> identities, paths;
     while (query.next()) {
         const QString id = query.value(0).toString();
-        const QUrl url(query.value(1).toString(), QUrl::StrictMode);
+        // Nickel stores literal spaces, including in "My Notebooks". Accept
+        // that observed form without relaxing strict parsing of other syntax.
+        QString contentId = query.value(1).toString();
+        contentId.replace(QLatin1Char(' '), QStringLiteral("%20"));
+        const QUrl url(contentId, QUrl::StrictMode);
         if (!url.isValid() || !url.isLocalFile() || !url.host().isEmpty()
             || url.hasQuery() || url.hasFragment())
             throw std::runtime_error("Invalid notebook path in the catalog.");
