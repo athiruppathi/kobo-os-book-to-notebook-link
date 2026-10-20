@@ -10,6 +10,18 @@ permissions:
   contents: read
 
 jobs:
+  catalog-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - run: sudo apt-get update && sudo apt-get install -y qtbase5-dev libqt5sql5-sqlite
+      - name: Test live catalog against temporary database and folders
+        run: |
+          g++ -std=c++11 -fPIC -Wall -Wextra -Werror native/links/test_live_catalog.cc -o /tmp/test-live-catalog $(pkg-config --cflags --libs Qt5Core Qt5Sql)
+          /tmp/test-live-catalog
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 15

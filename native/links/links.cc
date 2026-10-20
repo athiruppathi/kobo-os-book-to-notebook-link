@@ -2,6 +2,7 @@
 #include <NickelHook.h>
 #include <QApplication>
 #include "native_ui.h"
+#include "live_catalog.h"
 #include <QMap>
 #include <QSet>
 #include <algorithm>
@@ -160,6 +161,10 @@ class Bridge : public QObject {
     void (*noteVolume)(VolumeStorage *, const QWidget *) = nullptr;
     void (*noteQuit)(QWidget *) = nullptr;
     bool reverseQueued = false;
+    QPointer<QTimer> lastPageTimer;
+    int (*noteMaximum)(const QWidget *) = nullptr;
+    int (*notePosition)(const QWidget *) = nullptr;
+    void (*noteScroll)(QWidget *, int) = nullptr;
 
     void bindNotebookApi() {
         if (noteVolume && noteQuit) return;
@@ -184,6 +189,58 @@ class Bridge : public QObject {
         NativeValue(const NativeValue &) = delete;
         NativeValue &operator=(const NativeValue &) = delete;
     };
+    void openAtLastPage(QWidget *note, const QString &id) {
+        bindNotebookApi();
+        noteMaximum = reinterpret_cast<decltype(noteMaximum)>(dlsym(noteLibrary, "_ZNK17IInkNotePadWidget13scrollMaximumEv"));
+        notePosition = reinterpret_cast<decltype(notePosition)>(dlsym(noteLibrary, "_ZNK17IInkNotePadWidget11scrollValueEv"));
+        noteScroll = reinterpret_cast<decltype(noteScroll)>(dlsym(noteLibrary, "_ZN17IInkNotePadWidget8scrollToEi"));
+        if (!noteMaximum || !notePosition || !noteScroll)
+            throw std::runtime_error("Last-page navigation is unavailable.");
+        if (lastPageTimer) { lastPageTimer->stop(); lastPageTimer->deleteLater(); }
+        QPointer<QWidget> guard(note);
+        QTimer *timer = new QTimer(this);
+        lastPageTimer = timer;
+        int ticks = 0, previous = -1, stable = 0;
+        // Allow native renderVolume/setupVolume and its queued position restore
+        // to finish. Stop on user input; never drag a user back after they write.
+        QObject::connect(timer, &QTimer::timeout, this,
+            [this, guard, id, timer, ticks, previous, stable]() mutable {
+                auto stop = [timer]() { timer->stop(); timer->deleteLater(); };
+                try {
+                    if (!guard || api.view(api.window()) != guard
+                        || !QFile::exists(path("enabled")) || !QFile::exists(path("navigation.enabled"))) {
+                        stop(); return;
+                    }
+                    NativeValue volume(api.destroyVolume);
+                    noteVolume(&volume.data, guard);
+                    volume.constructed = true;
+                    if (!api.valid(&volume.data) || !api.basic(&volume.data)
+                        || api.externalId(&volume.data).compare(id, Qt::CaseInsensitive) != 0) {
+                        stop(); return;
+                    }
+                    QWidget *canvas = nullptr;
+                    for (QWidget *child : guard->findChildren<QWidget *>())
+                        if (child->inherits("IInkNotePadWidget")) { canvas = child; break; }
+                    ++ticks;
+                    if (canvas && canvas->isVisible()) {
+                        const int maximum = noteMaximum(canvas);
+                        stable = maximum == previous ? stable + 1 : 0;
+                        previous = maximum;
+                        // For basic notebooks maximum is the final zero-based
+                        // package-part index, not an arbitrary scroll distance.
+                        if (maximum >= 0 && stable >= 2 && ticks >= 5
+                            && (maximum > 0 || ticks >= 20)) {
+                            noteScroll(canvas, maximum);
+                            report(notePosition(canvas) == maximum
+                                ? "linked-notebook-last-page" : "last-page-transition-unconfirmed");
+                            stop(); return;
+                        }
+                    }
+                    if (ticks >= 50) { report("last-page-not-ready"); stop(); }
+                } catch (...) { nh_log("Last-page navigation failed"); stop(); }
+            });
+        timer->start(100);
+    }
     void getBook(NativeValue &value, const QString &id) {
         const void *device = api.device();
         if (!device) throw std::runtime_error("Current device unavailable.");
@@ -274,6 +331,12 @@ class Bridge : public QObject {
     }
 
     bool eventFilter(QObject *watched, QEvent *event) override {
+        if (lastPageTimer && lastPageTimer->isActive()
+            && (event->type() == QEvent::TouchBegin || event->type() == QEvent::MouseButtonPress
+                || event->type() == QEvent::TabletPress || event->type() == QEvent::KeyPress)) {
+            lastPageTimer->stop();
+            lastPageTimer->deleteLater();
+        }
         if (event->type() != QEvent::Show || !QFile::exists(path("enabled"))) return false;
         QMenu *menu = qobject_cast<QMenu *>(watched);
         if (!menu || menu->property("koboOsLinkedBook").toBool()) return false;
@@ -338,7 +401,7 @@ class Bridge : public QObject {
         writeJson(path("status.json"), object);
     }
     void link(QWidget *view, const QString &book) {
-        QJsonObject catalog = readJson(path("notebooks.json"));
+        QJsonObject catalog = liveNotebookCatalog();
         if (!catalog.value("notebooks").isArray()) throw std::runtime_error("Invalid notebook list.");
         QJsonArray rows = catalog.value("notebooks").toArray();
         struct Entry { QString path, id; bool folder; };
@@ -392,8 +455,7 @@ class Bridge : public QObject {
                 if (parentPath(entries.at(i).path) == folder) children.append(i);
             QStringList labels;
             QVector<int> actions;
-            if (!folder.isEmpty()) { labels.append("< Up one folder"); actions.append(-1); }
-            const int pageSize = 4;
+            const int pageSize = 3;
             const int begin = page * pageSize;
             for (int i = begin; i < qMin(begin + pageSize, children.size()); ++i) {
                 const Entry &entry = entries.at(children.at(i));
@@ -402,11 +464,14 @@ class Bridge : public QObject {
                 labels.append(entry.folder ? "[Folder] " + name + " >" : name);
                 actions.append(children.at(i));
             }
-            if (page > 0) { labels.append("< Previous page"); actions.append(-2); }
-            if (begin + pageSize < children.size()) { labels.append("Next page >"); actions.append(-3); }
-            QString heading = folder.isEmpty() ? "My Notebooks" : folder;
+            const int contentCount = labels.size();
+            if (!folder.isEmpty()) { labels.append("Up"); actions.append(-1); }
+            if (page > 0) { labels.append("Previous"); actions.append(-2); }
+            if (begin + pageSize < children.size()) { labels.append("Next"); actions.append(-3); }
+            QString heading = folder.isEmpty() ? "My Notebooks" : folder.section('/', -1);
             if (children.isEmpty()) heading += " (empty)";
-            int choice = ui.choose(original, heading, labels);
+            else heading += QString(" (%1/%2)").arg(page + 1).arg((children.size() + pageSize - 1) / pageSize);
+            int choice = ui.choose(original, heading, labels, contentCount);
             if (choice < 0) return;
             int action = actions.at(choice);
             if (action == -1) { folder = parentPath(folder); page = 0; }
@@ -468,7 +533,7 @@ class Bridge : public QObject {
                     api.openNotebook(object, notebook.get());
                     void *window = api.window();
                     QWidget *after = api.view(window);
-                    if (after != view && api.underneath(window) == view) {
+                    if (after && after->inherits("IInkNotePad") && api.underneath(window) == view) {
                         notebookView = after;
                         // The successful native push has finished using this opener.
                         // Retain it through the notebook session, then release it after
@@ -485,6 +550,7 @@ class Bridge : public QObject {
                                 }
                             });
                         report("view-pushed-reader-retained");
+                        openAtLastPage(after, id);
                     } else report("open-requested-transition-unconfirmed");
                     // Retain the QObject for asynchronous bundle/font dialogs. Do not
                     // manually pop a controller or bypass native notebook save/close.

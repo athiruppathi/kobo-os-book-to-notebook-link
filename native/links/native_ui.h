@@ -3,6 +3,7 @@
 #include <QPointer>
 #include <QSignalMapper>
 #include <QStringList>
+#include <QHBoxLayout>
 #include <dlfcn.h>
 #include <new>
 #include <stdexcept>
@@ -60,23 +61,36 @@ struct NativeUi {
         item->setMinimumHeight(qMax(72, item->fontMetrics().height() * 2));
         return item;
     }
-    int choose(QWidget *parent, const QString &heading, const QStringList &labels) {
+    int choose(QWidget *parent, const QString &heading, const QStringList &labels, int contentCount = -1) {
         OwnedDialog owned(create(parent));
         QDialog *dialog = owned.value.data();
-        title(dialog, heading);
+        title(dialog, parent->fontMetrics().elidedText(heading, Qt::ElideMiddle, qMax(240, parent->width() - 120)));
         acceptButton(dialog)->hide();
         rejectText(dialog, "Cancel");
         rejectVisible(dialog, true);
         QSignalMapper *mapper = new QSignalMapper(dialog);
         QObject::connect(mapper, static_cast<void(QSignalMapper::*)(int)>(&QSignalMapper::mapped),
             dialog, [dialog](int index) { dialog->done(1000 + index); });
+        QWidget *navigation = nullptr;
+        QHBoxLayout *navigationLayout = nullptr;
+        if (contentCount >= 0 && contentCount < labels.size()) {
+            navigation = new QWidget(dialog);
+            navigationLayout = new QHBoxLayout(navigation);
+            navigationLayout->setContentsMargins(0, 0, 0, 0);
+        }
         for (int i = 0; i < labels.size(); ++i) {
-            QWidget *item = tapItem(dialog, labels.at(i));
+            const bool isNavigation = navigation && i >= contentCount;
+            const int width = qMax(240, parent->width() - 120);
+            const QString label = isNavigation ? labels.at(i)
+                : parent->fontMetrics().elidedText(labels.at(i), Qt::ElideMiddle, width);
+            QWidget *item = tapItem(isNavigation ? navigation : dialog, label);
             mapper->setMapping(item, i);
             if (!QObject::connect(item, SIGNAL(tapped(bool)), mapper, SLOT(map())))
                 throw std::runtime_error("Cannot connect native tap handler.");
-            addWidget(dialog, item);
+            if (isNavigation) navigationLayout->addWidget(item, 1);
+            else addWidget(dialog, item);
         }
+        if (navigation) addWidget(dialog, navigation);
         const int result = dialog->exec();
         return result >= 1000 && result < 1000 + labels.size() ? result - 1000 : -1;
     }
