@@ -1,39 +1,68 @@
-# Development plan
+# Development guide
 
-## Device discovery
+## Current implementation
 
-Confirmed user target: Libra Colour, firmware 4.46.23836, basic notebooks only. Prioritize native basic-notebook navigation and export. Advanced-notebook handwriting recognition and extensions are outside the initial scope.
+The latest tested plugin is on [fix/swipe-pages-preserve-shortcuts](https://github.com/athiruppathi/kobo-os/tree/fix/swipe-pages-preserve-shortcuts). It includes the catalog-space fix and selective swipe page-turn suppression. These changes are not yet merged into main.
 
-Record firmware version from Settings -> Device information. Determine whether notebooks used are basic, advanced, or both. Connect via USB and back up user-visible contents before installation. Keep device databases, notebook data, credentials, and exports out of Git.
+The device runs a C++/Qt plugin inside Nickel. Node.js and Python tools run on the development computer; neither is required on the Kobo.
 
-Inspect a copy of device metadata read-only. Identify stable book and notebook IDs and the native notebook-opening interface for the installed firmware. Do not directly edit the live Kobo database.
+| Location | Purpose |
+| --- | --- |
+| `native/links/links.cc` | Native navigation, saved links, command dispatch, and notebook menu action. |
+| `native/links/native_ui.h` | Firmware-specific native dialogs and touch controls. |
+| `native/links/live_catalog.h` | Live, read-only notebook catalog and folder validation. |
+| `native/links/page_swipes.h` | In-memory suppression/restoration of swipe page-turn calls; latest branch only. |
+| `native/links/page_swipe_sites.h` | Exact call-site bytes for the pinned firmware; latest branch only. |
+| `native/` | Separate diagnostic probe and NickelHook build integration. |
+| `src/`, `test/` | Host-side storage/navigation prototypes and regression tests. |
+| `tools/` | Device inspection, packaging, and offline firmware analysis. |
+| `.github/workflows/native-probe.yml` | Native catalog/swipe tests, ARM builds, and update packaging on the latest branch. |
 
-## First device milestone
+## Tests and builds
 
-1. Install a compatible NickelMenu build after verifying firmware support.
-2. Prototype opening a chosen existing notebook through a native navigation hook.
-3. Capture the active book and rely on native saved reading position when returning.
-4. Connect the proven actions to the book-links storage model, ported to the device runtime.
+Check out the latest tested branch before building the current plugin.
 
-If no reliable notebook-opening hook is found, report the limitation before choosing UI automation or a separate notebook implementation. Firmware-specific symbols must be validated; no guessed binary addresses.
+Host prototype tests require Node.js 22 or later:
 
-## Subsequent milestones
+```sh
+node --test
+```
 
-- Hook only reader page-turn swipe handling, with a persistent toggle. Verify physical buttons, taps, selection, stylus, and menus separately.
-- Start notebook sync with files explicitly exported by the user. Upload through WebDAV to Nextcloud. Add native export triggering only after validation. Readable exports and restorable native backups are separate products.
-- Use Calibre-Web Kobo sync or a custom OPDS downloader. Check effects on Kobo services and Instapaper before changing the sync endpoint; downloading a file also requires native library import.
-- Preserve Instapaper initially. Optional article extraction and EPUB generation belong on the server.
+The native Actions workflow runs catalog tests against temporary SQLite databases and tests call-site patch isolation, restoration, and mismatch rejection. It then compiles with `ghcr.io/pgaskin/nickeltc:1` and NickelHook pinned to `bcd90ba94d90d22562fb64ef2920ed3323c1dae5`.
 
-## Architecture boundaries
+The **kobo-notebook-update** artifact contains the installable `KoboRoot.tgz`. Other artifacts ending in **uninstalled** contain development libraries.
 
-Device: native Nickel + small C/C++ extensions + lightweight sync scripts/client. Host prototype: Node.js for storage and tests only. Server: Nextcloud/WebDAV, Calibre-Web, optional article conversion.
+For manual packaging after a successful ARM build:
 
-The prototype store uses temporary-file replacement to avoid partial JSON writes. It assumes one writer; concurrent writers and device locking are not implemented.
+```sh
+python3 tools/package-probe.py native/links/libkobobooklinks.so dist/KoboRoot.tgz --component links
+```
 
-## Sources
+The packager validates the ARM shared object and packages only the plugin library. Marker files and menu setup are documented in the [user guide](usage.md).
 
-- https://github.com/pgaskin/NickelMenu
-- https://github.com/pgaskin/NickelHook
-- https://github.com/janeczku/calibre-web/wiki/Kobo-Integration
-- https://help.kobo.com/hc/en-us/articles/360062226733-Use-your-Kobo-eReader-as-a-notebook
-- https://help.kobo.com/hc/en-us/articles/33359968957463-Use-Instapaper-with-your-Kobo-eReader
+## Firmware boundaries
+
+The supported target is Libra Colour firmware 4.46.23836 and basic notebooks. Native library SHA-256 checks gate the adapter. Swipe changes additionally validate exact instruction bytes before modifying loaded process memory.
+
+Keep native navigation and save/close handling in Nickel. Read device metadata through read-only connections. Saved link JSON belongs to the plugin; do not edit the live Kobo database or notebook archives.
+
+Keep device databases, notebook content, exports, credentials, and firmware dumps out of Git. Firmware analysis documents are evidence for this exact build, not a compatibility promise for future versions.
+
+Passing host tests and compiling an ARM library do not establish device behavior. Record device feedback separately. The owner has reported the latest installed update works well.
+
+## Future ideas
+
+These are not implemented features:
+
+- Export readable notebook copies and upload them to Nextcloud/WebDAV, with offline retries.
+- Download DRM-free books through Calibre/Calibre-Web or OPDS.
+- Add a server-side article-to-EPUB inbox.
+
+Existing Kobo services remain outside the plugin's current feature scope.
+
+## References
+
+- [NickelHook](https://github.com/pgaskin/NickelHook)
+- [NickelMenu](https://github.com/pgaskin/NickelMenu)
+- [Firmware findings](firmware-4.46.23836.md)
+- [Documentation index](README.md)

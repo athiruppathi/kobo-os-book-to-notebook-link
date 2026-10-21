@@ -1,59 +1,55 @@
 # Kobo OS
 
-Personal extensions for Kobo Libra Colour, retaining Kobo's native Nickel reader, notebooks, and Instapaper.
+A native Kobo plugin for reading and handwritten notes on the **Kobo Libra Colour**. Link a book to a basic notebook, jump between them, and prevent accidental swipe page turns while keeping Kobo's vertical shortcuts.
 
-## Current status
+The plugin extends Kobo's existing Nickel reader and notebooks. Books and handwriting stay in Kobo's native apps; Node.js and Python are only development tools on your computer.
 
-The host prototype can now resolve a stored book link to a notebook's current
-file using Kobo's native `ExternalId`. See [notebook identity workflow](docs/notebook-identities.md).
-Native notebook opening on-device remains unimplemented.
+## What it adds
 
-Host-side prototype only. Nothing here modifies the Kobo firmware yet.
+| Feature | Behavior |
+| --- | --- |
+| **Link notebook** | Associate the current book with an existing basic notebook. |
+| **Browse notebook folders** | Choose from the live notebook catalog, with nested folders and Up / Previous / Next controls. No USB catalog refresh is needed. |
+| **Open linked notebook** | Jump from a book to its notebook at the **last existing page**, ready to continue writing. |
+| **Open linked book** | Return from a notebook through its native menu. If several books link to that notebook, choose which to open. |
+| **Disable swipe page turns** | Stop swipe-triggered page changes in books and basic notebooks, including both notebook rotation paths. |
+| **Keep vertical shortcuts** | Preserve native quick-access and footer gestures, along with page buttons, taps, menus, and handwriting. |
 
-Device target: **Kobo Libra Colour, firmware 4.46.23836, basic notebooks only**. Native hook compatibility has not been verified.
+Links use stable book and notebook identities rather than titles. The notebook catalog also handles spaces in notebook paths.
 
-The first implemented component stores a stable book ID -> notebook ID association. Native notebook opening, reader return, and device controls remain unimplemented until we inspect the device's firmware and navigation interfaces. This project does not assume NickelMenu can directly open an arbitrary notebook.
+## Compatibility and current version
 
-## Run
+- **Tested device:** Kobo Libra Colour.
+- **Firmware:** **4.46.23836**. Native library hashes and swipe call-site bytes are checked at runtime.
+- **Notebook type:** basic notebooks. Advanced notebooks and other device/firmware combinations are not supported by this build.
+- The owner has installed the latest build and reported that it works well. This is a personal plugin with limited device coverage.
 
-Requires Node.js 22 or newer on your computer (Node is not required or assumed on the Kobo).
+**Latest tested plugin source:** [`fix/swipe-pages-preserve-shortcuts`](https://github.com/athiruppathi/kobo-os/tree/fix/swipe-pages-preserve-shortcuts), commit [`20d38a1`](https://github.com/athiruppathi/kobo-os/commit/20d38a1d498f2999ba429207f53e6b9558d35ed2).
 
-```sh
-node --test
-node tools/book-links.mjs link book-id notebook-id
-node tools/book-links.mjs get book-id
-node tools/book-links.mjs unlink book-id
-```
+The catalog-space fix and swipe changes are still on feature branches; they have **not been merged into `main`**. Use the source/build above for the complete feature set described here.
 
-Run commands from this repository. The local state file defaults to `data/book-links.json`; set `KOBO_LINKS_FILE` to change it. Use actual stable IDs once discovered; filenames and titles are not reliable identifiers.
+## Install or update
 
-## Planned features
+For an existing installation:
 
-- Disable reading page-turn swipes independently from buttons, selection, and menus.
-- Choose a notebook for each book, open it from the reader, and return to the same book position.
-- Export notebooks and upload readable copies to Nextcloud/WebDAV, with an offline retry queue.
-- Download DRM-free books from Calibre/Calibre-Web.
-- Keep native Instapaper; optionally add a server-side article-to-EPUB inbox later.
+1. Download the **`kobo-notebook-update`** artifact from a successful [native build](https://github.com/athiruppathi/kobo-os/actions/workflows/native-probe.yml) on the latest tested branch.
+2. Extract the downloaded ZIP to obtain **`KoboRoot.tgz`**. Leave the TGZ compressed.
+3. Connect the Kobo by USB and copy `KoboRoot.tgz` into its `.kobo` folder.
+4. Safely eject and unplug. Let the Kobo install the update and restart.
 
-See [development plan](docs/development.md) for implementation gates and source references.
+Preserve existing menu entries, marker files, and saved links. The update package installs the plugin library only.
 
-## Inspect a connected Kobo
+[Installation, first-time setup, usage, and disabling the plugin →](docs/usage.md)
 
-Connect the reader by USB and choose Connect on the device. Run the read-only inventory with its drive letter (replace `E:/` with the actual mount):
+GitHub's **Code → Download ZIP** and the old `Kobo_Swipe_Filter_Source.zip` are source archives, not installable updates. Actions artifacts expire; the [verified build run](https://github.com/athiruppathi/kobo-os/actions/runs/39531898766) records the build and tests.
 
-```sh
-node tools/inspect-device.mjs E:/
-```
+## Documentation
 
-It reports firmware, database presence, possible notebook directory names and counts, notebook file and ZIP-signature counts, exported file counts, and NickelMenu configuration presence. It does not open the database or output serial numbers, notebook names, or notebook contents. Internal directory detection is heuristic.
+- [User guide](docs/usage.md): setup, book/notebook actions, settings, and troubleshooting.
+- [Change history](CHANGELOG.md): delivered features and validation.
+- [Development guide](docs/development.md): source layout, tests, builds, and future ideas.
+- [Documentation index](docs/README.md): implementation notes and historical research.
 
-See [device findings](docs/device-discovery.md) for the initial read-only inspection.
+## Scope
 
-## Notebook navigation research
-
-See [navigation findings](docs/notebook-navigation.md) for verified limitations and the next firmware inspection gate. Run the read-only metadata schema inspector with PowerShell:
-
-pwsh -NoProfile -File tools/inspect-notebooks.ps1 -Mount D:/
-
-Inspector regression checks: pwsh -NoProfile -File test/inspect-notebooks.test.ps1
-
+The current plugin focuses on book/notebook navigation and swipe controls. Nextcloud/WebDAV notebook uploads, Calibre downloads, and an article-to-EPUB inbox remain ideas; this plugin does not implement them.
