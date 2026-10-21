@@ -1,8 +1,9 @@
-// Pinned to the inspected ARM firmware. No hooks or raw notebook/database writes.
+// Pinned to the inspected ARM firmware. Swipe call sites patched only in memory.
 #include <NickelHook.h>
 #include <QApplication>
 #include "native_ui.h"
 #include "live_catalog.h"
+#include "page_swipes.h"
 #include <QMap>
 #include <QSet>
 #include <algorithm>
@@ -331,6 +332,10 @@ class Bridge : public QObject {
     }
 
     bool eventFilter(QObject *watched, QEvent *event) override {
+        if (event->type() == QEvent::Gesture) {
+            updatePageSwipes(QFile::exists(path("enabled"))
+                && !QFile::exists(path("allow-page-swipes")));
+        }
         if (lastPageTimer && lastPageTimer->isActive()
             && (event->type() == QEvent::TouchBegin || event->type() == QEvent::MouseButtonPress
                 || event->type() == QEvent::TabletPress || event->type() == QEvent::KeyPress)) {

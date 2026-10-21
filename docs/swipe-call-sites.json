@@ -1,0 +1,44 @@
+[
+  {
+    "library": "libnickel.so.1.0.0",
+    "site": "0xfa6210",
+    "caller": "_ZN11ReadingView12processSwipeEP12SwipeGesture",
+    "target": "_ZN11ReadingView17nextPageWithTimerEv",
+    "original": "f3f6eece"
+  },
+  {
+    "library": "libnickel.so.1.0.0",
+    "site": "0xfa621e",
+    "caller": "_ZN11ReadingView12processSwipeEP12SwipeGesture",
+    "target": "_ZN11ReadingView17prevPageWithTimerEv",
+    "original": "f0f630cb"
+  },
+  {
+    "library": "libnickel.so.1.0.0",
+    "site": "0xfa99ba",
+    "caller": "_ZN18SandboxReadingView12swipeGestureEP15GestureReceiverP12SwipeGesture",
+    "target": "_ZN18SandboxReadingView8pageLeftEv",
+    "original": "e7f646ce"
+  },
+  {
+    "library": "libnickel.so.1.0.0",
+    "site": "0xfa99c2",
+    "caller": "_ZN18SandboxReadingView12swipeGestureEP15GestureReceiverP12SwipeGesture",
+    "target": "_ZN18SandboxReadingView9pageRightEv",
+    "original": "e7f6d2c8"
+  },
+  {
+    "library": "libiinknote.so",
+    "site": "0x63578",
+    "caller": "_ZN17IInkNotePadWidget12swipeGestureEP15GestureReceiverP12SwipeGesture",
+    "target": "_ZN17IInkNotePadWidget13verticalSwipeEP12SwipeGesture",
+    "original": "d0f742ef"
+  },
+  {
+    "library": "libiinknote.so",
+    "site": "0x635a8",
+    "caller": "_ZN17IInkNotePadWidget12swipeGestureEP15GestureReceiverP12SwipeGesture",
+    "target": "_ZN17IInkNotePadWidget15horizontalSwipeEP12SwipeGesture",
+    "original": "d1f788ed"
+  }
+]
