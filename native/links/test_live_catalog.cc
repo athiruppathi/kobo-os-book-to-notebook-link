@@ -46,6 +46,21 @@ int main(int argc, char **argv) {
         catalog = liveNotebookCatalog(mount);
         require(catalog.value("notebooks").toArray().size() == 3, "Live additions not refreshed");
         require(catalog.value("folders").toArray().size() == 4, "Live folders not refreshed");
+        // Nickel's database contains literal spaces, unlike QUrl::toEncoded().
+        const QString rawRelative = "New folder/Raw notebook name.nebo";
+        query.prepare("INSERT INTO content VALUES (?, ?, ?)");
+        query.addBindValue(QUuid::createUuid().toString().mid(1, 36));
+        query.addBindValue("file:///mnt/onboard/My Notebooks/" + rawRelative);
+        query.addBindValue("application/vnd.myscript.nebo+raw");
+        require(query.exec(), "Raw-space insert failed");
+        touch(mount + "/My Notebooks/" + rawRelative);
+        catalog = liveNotebookCatalog(mount);
+        require(catalog.value("notebooks").toArray().size() == 4, "Raw-space URI rejected");
+        bool foundRaw = false;
+        for (const QJsonValue &value : catalog.value("notebooks").toArray())
+            if (value.toObject().value("relativePath").toString() == rawRelative) foundRaw = true;
+        require(foundRaw, "Raw-space URI decoded to wrong notebook");
+        require(QSqlDatabase::connectionNames() == before, "Raw-space connection leaked");
         {
             CatalogConnection readonly;
             readonly.db.setDatabaseName(writer.databaseName());

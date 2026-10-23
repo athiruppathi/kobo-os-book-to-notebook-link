@@ -55,3 +55,13 @@ jobs:
           path: native/links/libkobobooklinks.so
           if-no-files-found: error
           retention-days: 7
+      - name: Package notebook links for manual installation
+        run: |
+          mkdir -p dist
+          python3 tools/package-probe.py native/links/libkobobooklinks.so dist/KoboRoot.tgz --component links
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kobo-notebook-update
+          path: dist/KoboRoot.tgz
+          if-no-files-found: error
+          retention-days: 30
